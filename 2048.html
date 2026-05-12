@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sakura 2048 - Smooth Edition</title>
+    <style>
+        :root {
+            --bg-color: #fff5f7;
+            --container-bg: #f8d7da;
+            --cell-empty: #fae8eb;
+            --text-dark: #8b5e66;
+            --text-light: #ffffff;
+            --accent-pink: #ffb7c5;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+            overflow: hidden;
+        }
+
+        .main-wrapper {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 50px;
+            padding: 40px;
+            background: white;
+            border-radius: 32px;
+            box-shadow: 0 15px 40px rgba(255, 182, 197, 0.25);
+            position: relative;
+        }
+
+        .game-area {
+            position: relative;
+        }
+
+        canvas {
+            background-color: var(--container-bg);
+            border-radius: 12px;
+            display: block;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            min-width: 200px;
+        }
+
+        .score-box {
+            background: linear-gradient(135deg, #ffb7c5 0%, #ff9aa2 100%);
+            padding: 20px;
+            border-radius: 16px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(255, 154, 162, 0.3);
+        }
+
+        .score-title {
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+
+        .score-value {
+            font-size: 32px;
+            font-weight: 800;
+        }
+
+        .info-panel h2 {
+            margin-top: 0;
+            color: #ff8fa3;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .info-panel p {
+            color: var(--text-dark);
+            font-size: 15px;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .controls-hint {
+            display: inline-block;
+            background: #fae8eb;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+
+        /* 通關與失敗的按鈕樣式 */
+        .btn-reset {
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: #ffb7c5;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(255, 182, 197, 0.4);
+        }
+
+        .btn-reset:hover {
+            background: #ff8fa3;
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .main-wrapper {
+                flex-direction: column;
+                gap: 20px;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="main-wrapper">
+    <!-- 遊戲畫布 -->
+    <div class="game-area">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <!-- 右側資訊 -->
+    <div class="sidebar">
+        <div class="info-panel">
+            <h2>Sakura 2048</h2>
+            <p>使用 <span class="controls-hint">方向鍵</span> 移動方塊<br>合併相同的櫻花瓣！</p>
+        </div>
+
+        <div class="score-box">
+            <div class="score-title">SCORE</div>
+            <div id="score" class="score-value">0</div>
+        </div>
+        
+        <button class="btn-reset" onclick="initGame()">重新開始</button>
+
+        <div class="info-panel" style="font-size: 13px; opacity: 0.8; margin-top: auto;">
+            每一場合併都是一次綻放 ✨
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+
+    const GRID_SIZE = 4;
+    const CELL_SIZE = 88;
+    const GAP = 10;
+    const ANIMATION_SPEED = 0.18; 
+
+    let grid = [];
+    let score = 0;
+    let tiles = [];
+    let gameState = 'playing'; // 'playing', 'won', 'over'
+    let winOverlayOpacity = 0;
+
+    const colors = {
+        2: { bg: '#fff0f3', text: '#ff8fa3' },
+        4: { bg: '#ffeaee', text: '#ff758f' },
+        8: { bg: '#ffccd5', text: '#ffffff' },
+        16: { bg: '#ffb3c1', text: '#ffffff' },
+        32: { bg: '#ff8fa3', text: '#ffffff' },
+        64: { bg: '#ff758f', text: '#ffffff' },
+        128: { bg: '#ff4d6d', text: '#ffffff' },
+        256: { bg: '#c9184a', text: '#ffffff' },
+        512: { bg: '#a4133c', text: '#ffffff' },
+        1024: { bg: '#800f2f', text: '#ffffff' },
+        2048: { bg: '#590d22', text: '#ffffff' }
+    };
+
+    class Tile {
+        constructor(row, col, value) {
+            this.row = row;
+            this.col = col;
+            this.value = value;
+            this.x = col * (CELL_SIZE + GAP) + GAP;
+            this.y = row * (CELL_SIZE + GAP) + GAP;
+            this.targetX = this.x;
+            this.targetY = this.y;
+            this.scale = 0.1;
+        }
+
+        update() {
+            this.x += (this.targetX - this.x) * ANIMATION_SPEED;
+            this.y += (this.targetY - this.y) * ANIMATION_SPEED;
+            
+            if (this.scale < 1) {
+                this.scale += 0.1;
+                if (this.scale > 1) this.scale = 1;
+            }
+        }
+
+        draw() {
+            const config = colors[this.value] || { bg: '#590d22', text: '#ffffff' };
+            
+            ctx.save();
+            const centerX = this.x + CELL_SIZE / 2;
+            const centerY = this.y + CELL_SIZE / 2;
+            ctx.translate(centerX, centerY);
+            ctx.scale(this.scale, this.scale);
+            ctx.translate(-centerX, -centerY);
+
+            ctx.fillStyle = config.bg;
+            ctx.shadowColor = 'rgba(255, 143, 163, 0.2)';
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.roundRect(this.x, this.y, CELL_SIZE, CELL_SIZE, 10);
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = config.text;
+            ctx.font = `bold ${this.value > 100 ? 28 : 36}px "Segoe UI", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(this.value, this.x + CELL_SIZE/2, this.y + CELL_SIZE/2);
+            
+            ctx.restore();
+        }
+    }
+
+    function initGame() {
+        grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(null));
+        tiles = [];
+        score = 0;
+        scoreEl.innerText = score;
+        gameState = 'playing';
+        winOverlayOpacity = 0;
+        addRandomTile();
+        addRandomTile();
+    }
+
+    function addRandomTile() {
+        let emptyCells = [];
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                if (!grid[r][c]) emptyCells.push({r, c});
+            }
+        }
+        if (emptyCells.length > 0) {
+            const {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            const val = Math.random() < 0.9 ? 2 : 4;
+            const newTile = new Tile(r, c, val);
+            grid[r][c] = newTile;
+            tiles.push(newTile);
+        }
+    }
+
+    function move(direction) {
+        if (gameState !== 'playing') return;
+
+        let moved = false;
+        const isVertical = direction % 2 === 0;
+        const isForward = direction === 1 || direction === 2;
+
+        for (let i = 0; i < GRID_SIZE; i++) {
+            let line = [];
+            for (let j = 0; j < GRID_SIZE; j++) {
+                const r = isVertical ? j : i;
+                const c = isVertical ? i : j;
+                if (grid[r][c]) line.push(grid[r][c]);
+            }
+
+            if (isForward) line.reverse();
+
+            let newLine = [];
+            for (let j = 0; j < line.length; j++) {
+                if (j < line.length - 1 && line[j].value === line[j+1].value) {
+                    const combinedValue = line[j].value * 2;
+                    line[j].value = combinedValue;
+                    score += combinedValue;
+                    newLine.push(line[j]);
+                    
+                    if (combinedValue === 2048) gameState = 'won';
+
+                    const targetToRemove = line[j+1];
+                    tiles = tiles.filter(t => t !== targetToRemove);
+                    j++;
+                    moved = true;
+                } else {
+                    newLine.push(line[j]);
+                }
+            }
+
+            while (newLine.length < GRID_SIZE) newLine.push(null);
+            if (isForward) newLine.reverse();
+
+            for (let j = 0; j < GRID_SIZE; j++) {
+                const r = isVertical ? j : i;
+                const c = isVertical ? i : j;
+                const tile = newLine[j];
+                if (grid[r][c] !== tile) moved = true;
+                grid[r][c] = tile;
+                if (tile) {
+                    tile.row = r;
+                    tile.col = c;
+                    tile.targetX = c * (CELL_SIZE + GAP) + GAP;
+                    tile.targetY = r * (CELL_SIZE + GAP) + GAP;
+                }
+            }
+        }
+
+        if (moved) {
+            setTimeout(() => {
+                addRandomTile();
+                checkGameOver();
+            }, 100);
+            scoreEl.innerText = score;
+        }
+    }
+
+    function checkGameOver() {
+        // 檢查是否還有空格
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                if (!grid[r][c]) return;
+            }
+        }
+        // 檢查是否還能合併
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                const val = grid[r][c].value;
+                if (r < GRID_SIZE - 1 && grid[r+1][c].value === val) return;
+                if (c < GRID_SIZE - 1 && grid[r][c+1].value === val) return;
+            }
+        }
+        if (gameState !== 'won') gameState = 'over';
+    }
+
+    function drawBackground() {
+        ctx.fillStyle = '#f8d7da';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#fae8eb';
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                ctx.beginPath();
+                ctx.roundRect(c * (CELL_SIZE + GAP) + GAP, r * (CELL_SIZE + GAP) + GAP, CELL_SIZE, CELL_SIZE, 10);
+                ctx.fill();
+            }
+        }
+    }
+
+    function drawOverlays() {
+        if (gameState === 'won' || gameState === 'over') {
+            if (winOverlayOpacity < 1) winOverlayOpacity += 0.04;
+            
+            ctx.save();
+            ctx.globalAlpha = winOverlayOpacity * 0.85;
+            ctx.fillStyle = gameState === 'won' ? '#fff0f3' : '#f8d7da';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.globalAlpha = winOverlayOpacity;
+            ctx.fillStyle = '#8b5e66';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // 繪製標題
+            ctx.font = 'bold 40px "Segoe UI"';
+            const msg = gameState === 'won' ? '綻放成功！' : '花期已盡';
+            ctx.fillText(msg, canvas.width / 2, canvas.height / 2 - 20);
+            
+            // 繪製小字
+            ctx.font = '16px "Segoe UI"';
+            const subMsg = gameState === 'won' ? '你拼出了 2048' : '沒有可以移動的方塊了';
+            ctx.fillText(subMsg, canvas.width / 2, canvas.height / 2 + 30);
+            
+            ctx.restore();
+        }
+    }
+
+    function gameLoop() {
+        drawBackground();
+        
+        tiles.forEach(tile => {
+            tile.update();
+            tile.draw();
+        });
+
+        drawOverlays();
+        requestAnimationFrame(gameLoop);
+    }
+
+    window.addEventListener('keydown', e => {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
+            move(['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'].indexOf(e.key));
+        }
+    });
+
+    initGame();
+    requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

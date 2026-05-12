@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouBike 2.0 實時監測儀表板</title>
+    <!-- 引入 Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <style>
+        :root {
+            --primary-color: #ffb7c5; /* 櫻花粉 */
+            --primary-hover: #ff99ac;
+            --secondary-color: #f8ad9d; /* 柔粉橙 */
+            --bg-color: #fff5f7; /* 極淡粉背景 */
+            --card-bg: #ffffff;
+            --text-dark: #5e4b4e; /* 深灰粉色文字 */
+            --text-light: #a08d90;
+            --accent-pink: #fbc4ab;
+        }
+
+        body {
+            font-family: 'PingFang TC', 'Heiti TC', 'Microsoft JhengHei', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-dark);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 24px;
+            box-shadow: 0 15px 40px rgba(255, 183, 197, 0.2);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin: 0 0 10px 0;
+            color: #d88a9a; /* 粉色標題 */
+            letter-spacing: 1px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #ffeef2;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: #d88a9a;
+            border: 1px solid #ffd1dc;
+        }
+
+        .dot {
+            height: 8px;
+            width: 8px;
+            background-color: #ff99ac;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.7; }
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .select-wrapper {
+            position: relative;
+        }
+
+        select {
+            appearance: none;
+            background-color: #fff;
+            border: 2px solid #ffe1e8;
+            padding: 10px 40px 10px 20px;
+            font-size: 1rem;
+            color: var(--text-dark);
+            border-radius: 14px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s;
+            min-width: 150px;
+        }
+
+        select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(255, 183, 197, 0.2);
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(255, 183, 197, 0.4);
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(255, 183, 197, 0.5);
+        }
+
+        /* 地圖樣式 */
+        #map {
+            height: 350px;
+            width: 100%;
+            border-radius: 20px;
+            margin-bottom: 25px;
+            border: 4px solid #fff0f3;
+            z-index: 1;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.03);
+        }
+
+        #dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .station-card {
+            background: #fff;
+            border: 1px solid #ffe1e8;
+            padding: 22px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .station-card:hover {
+            transform: scale(1.02);
+            border-color: var(--primary-color);
+            box-shadow: 0 10px 20px rgba(255, 183, 197, 0.15);
+        }
+
+        .station-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .station-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #b3707d;
+        }
+
+        .station-area {
+            font-size: 0.8rem;
+            background: #fff0f3;
+            padding: 3px 10px;
+            border-radius: 8px;
+            color: #d88a9a;
+            font-weight: 600;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .data-item {
+            background: #fff9fa;
+            padding: 14px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #fff0f3;
+        }
+
+        .label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+
+        .value {
+            font-size: 1.3rem;
+            font-weight: 800;
+        }
+
+        .available-text { color: #f08080; } /* 珊瑚粉 */
+        .total-text { color: #9ab7d3; } /* 柔和藍 */
+
+        .update-time {
+            text-align: center;
+            margin-top: 25px;
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        .loading-skeleton {
+            background: linear-gradient(90deg, #fff0f3 25%, #fff9fa 50%, #fff0f3 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            height: 150px;
+            border-radius: 20px;
+            grid-column: 1 / -1;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .leaflet-popup-content-wrapper {
+            border-radius: 12px;
+            background: #fff;
+            color: var(--text-dark);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>🌸 YouBike 2.0 區域導覽 🌸</h1>
+            <div class="status-badge">
+                <span class="dot"></span>
+                <span id="refreshStatus">系統連線中...</span>
+            </div>
+        </header>
+
+        <div class="controls">
+            <div class="select-wrapper">
+                <select id="areaSelect">
+                    <option value="all">所有區域 (隨機)</option>
+                </select>
+            </div>
+            <button class="btn" id="fetchBtn">立即同步</button>
+        </div>
+
+        <!-- 地圖容器 -->
+        <div id="map"></div>
+        
+        <div id="dashboard"></div>
+
+        <div class="update-time" id="updateTime">
+            最後更新時間：正在載入...
+        </div>
+    </div>
+
+    <!-- 引入 Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        const fetchBtn = document.getElementById('fetchBtn');
+        const areaSelect = document.getElementById('areaSelect');
+        const dashboard = document.getElementById('dashboard');
+        const updateTimeEl = document.getElementById('updateTime');
+        const refreshStatus = document.getElementById('refreshStatus');
+        const apiUrl = 'https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json';
+        
+        let autoRefreshTimer = null;
+        let map;
+        let markersGroup;
+        let fullData = []; // 存儲原始完整數據
+
+        // 初始化
+        window.onload = () => {
+            initMap();
+            fetchData();
+            startAutoRefresh();
+        };
+
+        function initMap() {
+            map = L.map('map').setView([25.0330, 121.5654], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO'
+            }).addTo(map);
+            markersGroup = L.featureGroup().addTo(map);
+        }
+
+        async function fetchData() {
+            showLoading();
+
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error('API 連線失敗');
+
+                fullData = await response.json();
+                
+                // 動態生成區域選單（如果尚未生成）
+                if (areaSelect.options.length <= 1) {
+                    populateAreaSelect(fullData);
+                }
+
+                filterAndRender();
+                updateTimestamp();
+
+            } catch (error) {
+                dashboard.innerHTML = `<div style="color: #d88a9a; text-align: center; padding: 20px; grid-column: 1/-1;">
+                    哎呀！資料同步出錯了 🎀<br>${error.message}
+                </div>`;
+            }
+        }
+
+        // 生成區域選單
+        function populateAreaSelect(data) {
+            const areas = [...new Set(data.map(item => item.sarea))].sort();
+            areas.forEach(area => {
+                const option = document.createElement('option');
+                option.value = area;
+                option.textContent = area;
+                areaSelect.appendChild(option);
+            });
+        }
+
+        // 根據選定區域過濾數據
+        function filterAndRender() {
+            const selectedArea = areaSelect.value;
+            let filtered;
+
+            if (selectedArea === 'all') {
+                // 如果是「全部」，顯示前 10 筆或隨機抽樣
+                filtered = fullData.slice(0, 10);
+            } else {
+                // 過濾特定區域，最多顯示 10 站點
+                filtered = fullData.filter(item => item.sarea === selectedArea).slice(0, 10);
+            }
+
+            const processed = filtered.map(item => ({
+                name: item.sna ? item.sna.replace('YouBike2.0_', '') : '未知站點',
+                area: item.sarea || '未知區域',
+                total: item.Quantity ?? 0,
+                available: item.available_rent_bikes ?? 0,
+                lat: item.latitude,
+                lng: item.longitude
+            }));
+
+            renderDashboard(processed);
+            updateMarkers(processed);
+        }
+
+        function renderDashboard(stations) {
+            dashboard.innerHTML = ''; 
+            if (stations.length === 0) {
+                dashboard.innerHTML = '<div style="text-align:center; grid-column: 1/-1; padding: 20px; color: var(--text-light);">該區域目前無數據 🎀</div>';
+                return;
+            }
+
+            stations.forEach(station => {
+                const card = document.createElement('div');
+                card.className = 'station-card';
+                card.innerHTML = `
+                    <div class="station-header">
+                        <div class="station-name">${station.name}</div>
+                        <div class="station-area">${station.area}</div>
+                    </div>
+                    <div class="data-grid">
+                        <div class="data-item">
+                            <span class="label">目前所剩車位</span>
+                            <span class="value available-text">${station.available}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="label">總車位</span>
+                            <span class="value total-text">${station.total}</span>
+                        </div>
+                    </div>
+                `;
+                dashboard.appendChild(card);
+            });
+        }
+
+        function updateMarkers(stations) {
+            markersGroup.clearLayers();
+            const points = [];
+
+            stations.forEach(station => {
+                if (station.lat && station.lng) {
+                    const marker = L.marker([station.lat, station.lng])
+                        .bindPopup(`
+                            <div style="font-family: sans-serif; text-align: center;">
+                                <strong style="color: #b3707d;">${station.name}</strong><hr style="border: 0; border-top: 1px solid #ffe1e8; margin: 5px 0;">
+                                <span style="color: #f08080;">剩餘: ${station.available}</span><br>
+                                <span style="color: #a08d90;">總量: ${station.total}</span>
+                            </div>
+                        `);
+                    markersGroup.addLayer(marker);
+                    points.push([station.lat, station.lng]);
+                }
+            });
+
+            if (points.length > 0) {
+                map.fitBounds(markersGroup.getBounds(), { padding: [50, 50] });
+            }
+        }
+
+        function showLoading() {
+            dashboard.innerHTML = `<div class="loading-skeleton"></div>`;
+        }
+
+        function updateTimestamp() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
+            updateTimeEl.innerText = `最後同步：${timeStr} 🎀`;
+            refreshStatus.innerText = "已同步：每 60 秒自動更新數據";
+        }
+
+        function startAutoRefresh() {
+            if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+            autoRefreshTimer = setInterval(() => {
+                fetchData();
+            }, 60000); 
+        }
+
+        // 事件監聽
+        fetchBtn.addEventListener('click', () => {
+            fetchData();
+            startAutoRefresh();
+        });
+
+        areaSelect.addEventListener('change', () => {
+            filterAndRender();
+        });
+    </script>
+
+</body>
+</html>
