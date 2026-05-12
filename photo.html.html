@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 數位影像工作坊 Pro - 智慧去背版</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #fdfaf7;
+            --panel-bg: #ffffff;
+            --accent-pink: #fee2e2;
+            --accent-blue: #e0f2fe;
+            --primary-btn: #fdbcb4; 
+            --secondary-btn: #bae6fd;
+            --text-primary: #5f5a58;
+            --text-secondary: #a8a29e;
+            --border: #fef2f2;
+            --danger: #fca5a5;
+            --success: #99f6e4;
+            --card-bg: #fff7f6;
+            --shadow: 0 10px 15px -3px rgba(253, 188, 180, 0.1);
+        }
+
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: 'Kiwi Maru', 'Segoe UI', serif;
+            overflow: hidden; user-select: none;
+        }
+
+        .app-container { display: flex; height: 100vh; }
+
+        .sidebar-left {
+            width: 320px; background-color: var(--panel-bg);
+            border-right: 2px solid var(--border);
+            display: flex; flex-direction: column;
+            padding: 24px; box-sizing: border-box; overflow-y: auto;
+        }
+
+        .sidebar-right {
+            width: 240px; background-color: var(--panel-bg);
+            border-left: 2px solid var(--border);
+            display: flex; flex-direction: column;
+            padding: 20px; box-sizing: border-box;
+        }
+
+        h1 { 
+            font-size: 1.4rem; margin-bottom: 20px; color: var(--primary-btn); 
+            letter-spacing: 2px; text-align: center; font-weight: 500;
+            border-bottom: 2px dashed var(--primary-btn); padding-bottom: 10px;
+        }
+        
+        h3 { 
+            font-size: 0.85rem; color: var(--text-secondary); 
+            margin-bottom: 12px; margin-top: 15px; font-weight: 500;
+            display: flex; align-items: center;
+        }
+        h3::before { content: "✿"; margin-right: 5px; color: var(--primary-btn); }
+
+        .control-group { margin-bottom: 20px; }
+        
+        input[type="range"] { 
+            width: 100%; accent-color: var(--primary-btn); 
+            cursor: pointer; height: 8px; background: #fff7f6;
+            border-radius: 10px; appearance: none;
+        }
+        
+        .btn {
+            padding: 10px; background-color: #fff; border: 2px solid var(--border);
+            color: var(--text-primary); border-radius: 15px; cursor: pointer; 
+            font-size: 0.85rem; transition: all 0.2s; text-align: center;
+            font-family: 'Kiwi Maru', serif; display: block; width: 100%; margin-bottom: 8px;
+        }
+        .btn:hover:not(:disabled) { border-color: var(--secondary-btn); background-color: #f0f9ff; }
+        .btn:active { transform: scale(0.98); }
+        .btn.active { border-color: var(--primary-btn); background-color: var(--card-bg); }
+        
+        .btn-primary { 
+            background: linear-gradient(135deg, #fdbcb4 0%, #fda4af 100%);
+            border: none; color: white; box-shadow: 0 4px 10px rgba(253, 188, 180, 0.3);
+        }
+        .btn-ai {
+            background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 100%);
+            border: none; color: white; box-shadow: 0 4px 10px rgba(129, 140, 248, 0.2);
+        }
+
+        .main-stage {
+            flex-grow: 1; display: flex; flex-direction: column;
+            background-color: #f0f0f0; 
+            position: relative;
+        }
+
+        .canvas-container {
+            flex-grow: 1; display: flex; align-items: center; justify-content: center;
+            padding: 40px; overflow: hidden; position: relative;
+            background-image: 
+                linear-gradient(45deg, #e5e5e5 25%, transparent 25%), 
+                linear-gradient(-45deg, #e5e5e5 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #e5e5e5 75%), 
+                linear-gradient(-45deg, transparent 75%, #e5e5e5 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        canvas {
+            max-width: 100%; max-height: 100%;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+            background-color: transparent; border-radius: 8px;
+        }
+
+        /* 載入動畫 */
+        #loadingOverlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: none; flex-direction: column; align-items: center;
+            justify-content: center; z-index: 1000;
+        }
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid var(--accent-pink);
+            border-top: 4px solid var(--primary-btn); border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 15px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #dropOverlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(253, 188, 180, 0.1); border: 4px dashed var(--primary-btn);
+            display: none; align-items: center; justify-content: center;
+            z-index: 50; pointer-events: none; color: var(--primary-btn);
+            font-size: 1.5rem; border-radius: 30px; margin: 20px;
+            width: calc(100% - 40px); height: calc(100% - 40px);
+        }
+
+        .history-list { flex-grow: 1; overflow-y: auto; }
+        .history-item {
+            padding: 12px; background: #fff; border-radius: 12px; margin-bottom: 8px;
+            font-size: 0.8rem; cursor: pointer; border: 2px solid var(--border);
+            display: flex; flex-direction: column; transition: all 0.2s;
+        }
+        .history-item:hover { border-color: var(--secondary-btn); }
+        .history-item.active { border-color: var(--primary-btn); background: #fff7f6; }
+    </style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+    <div class="spinner"></div>
+    <div id="loadingText">AI 正在努力分析影像...</div>
+</div>
+
+<div class="app-container">
+    <aside class="sidebar-left">
+        <h1>影像工作室</h1>
+        
+        <button class="btn btn-primary" onclick="document.getElementById('upload').click()">✦ 選擇圖片 ✦</button>
+        <input type="file" id="upload" accept="image/*" style="display:none">
+        
+        <div class="control-group">
+            <h3>智慧工具</h3>
+            <button class="btn btn-ai" id="aiRemoveBg">✨ AI 自動去背</button>
+            <p style="font-size:0.7rem; color:var(--text-secondary); text-align:center;">使用 Gemini AI 辨識主體</p>
+        </div>
+
+        <div class="control-group">
+            <h3>手動去背</h3>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <button class="btn" id="modeEraser">橡皮擦</button>
+                <button class="btn" id="modeRestore">還原筆</button>
+            </div>
+            <div style="margin-top:10px">
+                <div style="display:flex; justify-content:space-between; font-size:0.75rem;">
+                    <span>筆刷大小</span><span id="v-brushSize">30</span>
+                </div>
+                <input type="range" id="brushSize" min="5" max="100" value="30">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>常用工具</h3>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+                <button class="btn" id="modeCrop">裁切</button>
+                <button class="btn" id="rotate90">旋轉</button>
+                <button class="btn" id="flipH">翻轉</button>
+                <button class="btn" onclick="applySpecialFilter('gray')">黑白</button>
+            </div>
+        </div>
+
+        <button class="btn btn-success" style="background:#10b981; color:white; border:none; margin-top:auto;" id="downloadBtn">儲存 PNG (透明)</button>
+    </aside>
+
+    <main class="main-stage">
+        <div style="height:64px; background:white; border-bottom:2px solid var(--border); display:flex; align-items:center; padding:0 24px; justify-content:space-between;">
+            <div style="display:flex; gap:12px">
+                <button class="btn" id="undoBtn" style="width:auto; padding:5px 20px">上一步</button>
+                <button class="btn" id="resetBtn" style="width:auto; padding:5px 20px; color:var(--danger);">重設畫布</button>
+            </div>
+            <div id="modeStatus" style="font-size:0.8rem; color:var(--text-secondary);">模式: 預覽</div>
+        </div>
+        
+        <div class="canvas-container" id="dropZone">
+            <div id="dropOverlay">🌸 拖放圖片 🌸</div>
+            <canvas id="canvas"></canvas>
+        </div>
+    </main>
+
+    <aside class="sidebar-right">
+        <h1>操作紀錄</h1>
+        <div class="history-list" id="historyList"></div>
+    </aside>
+</div>
+
+<script>
+    const apiKey = ""; // 自動注入環境變數
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const upload = document.getElementById('upload');
+    const historyList = document.getElementById('historyList');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+
+    let originalImage = null;
+    let offCanvas = document.createElement('canvas');
+    let offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+    
+    // 用於還原筆刷的原始備份（僅限當前載入的圖片）
+    let backupCanvas = document.createElement('canvas');
+    let backupCtx = backupCanvas.getContext('2d');
+
+    let historyStack = [];
+    let isDrawing = false;
+    let currentMode = 'view'; 
+    let brushSize = 30;
+
+    // --- 初始化畫布 ---
+    function initCanvasDimensions(w, h) {
+        canvas.width = offCanvas.width = w;
+        canvas.height = offCanvas.height = h;
+        // 注意：backupCanvas 只有在載入新圖時才重設，或是隨裁切改變
+    }
+
+    function handleFile(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                originalImage = img;
+                initCanvasDimensions(img.width, img.height);
+                backupCanvas.width = img.width;
+                backupCanvas.height = img.height;
+                
+                offCtx.clearRect(0, 0, img.width, img.height);
+                offCtx.drawImage(img, 0, 0);
+                backupCtx.drawImage(img, 0, 0);
+                
+                historyStack = [];
+                saveState("載入圖片");
+                render();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    upload.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+    // --- 繪圖與渲染 ---
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(offCanvas, 0, 0);
+    }
+
+    // 保存當前狀態至歷史紀錄
+    function saveState(name) {
+        const state = {
+            name: name,
+            width: offCanvas.width,
+            height: offCanvas.height,
+            data: offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        historyStack.push(state);
+        if (historyStack.length > 20) historyStack.shift();
+        updateHistoryUI();
+    }
+
+    // 更新右側歷史紀錄列表
+    function updateHistoryUI() {
+        historyList.innerHTML = '';
+        historyStack.slice().reverse().forEach((state, i) => {
+            const idx = historyStack.length - 1 - i;
+            const item = document.createElement('div');
+            item.className = `history-item ${idx === historyStack.length - 1 ? 'active' : ''}`;
+            item.innerHTML = `
+                <span style="font-weight:500">${state.name}</span>
+                <span style="font-size:0.7rem; color:#a8a29e; margin-top:4px">${state.time}</span>
+            `;
+            item.onclick = () => jumpToHistory(idx);
+            historyList.appendChild(item);
+        });
+        document.getElementById('undoBtn').disabled = historyStack.length <= 1;
+    }
+
+    // 跳轉到特定歷史紀錄
+    function jumpToHistory(index) {
+        const state = historyStack[index];
+        historyStack = historyStack.slice(0, index + 1);
+        
+        // 同步所有畫布尺寸
+        initCanvasDimensions(state.width, state.height);
+        offCtx.putImageData(state.data, 0, 0);
+        
+        updateHistoryUI();
+        render();
+    }
+
+    // --- AI 智慧去背 ---
+    async function aiRemoveBackground() {
+        if (!originalImage) return;
+        loadingOverlay.style.display = 'flex';
+        
+        try {
+            // 將當前顯示內容（包含之前的編輯）轉為 base64
+            const base64Data = offCanvas.toDataURL('image/png').split(',')[1];
+            
+            const prompt = "Please identify the main subject in this image and provide a precise alpha mask where the subject is 255 (white) and the background is 0 (black). Output only the processed image with the background removed as an image modality response.";
+            
+            const response = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            { inlineData: { mimeType: "image/png", data: base64Data } }
+                        ]
+                    }],
+                    generationConfig: { responseModalities: ['IMAGE'] }
+                })
+            });
+
+            const result = await response.json();
+            const maskBase64 = result.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+            if (maskBase64) {
+                const maskImg = new Image();
+                maskImg.onload = () => {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = offCanvas.width;
+                    tempCanvas.height = offCanvas.height;
+                    const tCtx = tempCanvas.getContext('2d');
+                    
+                    tCtx.drawImage(maskImg, 0, 0, offCanvas.width, offCanvas.height);
+                    
+                    const sourceData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+                    const maskData = tCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+                    
+                    for (let i = 0; i < sourceData.data.length; i += 4) {
+                        const alphaValue = maskData.data[i]; // 取 Mask 的亮度
+                        sourceData.data[i + 3] = alphaValue; 
+                    }
+                    
+                    offCtx.putImageData(sourceData, 0, 0);
+                    saveState("AI 智慧去背"); // 這裡觸發存檔
+                    render();
+                    loadingOverlay.style.display = 'none';
+                };
+                maskImg.src = `data:image/png;base64,${maskBase64}`;
+            } else {
+                throw new Error("AI 未能成功生成遮罩資料");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("AI 去背服務異常，請稍後重試。");
+            loadingOverlay.style.display = 'none';
+        }
+    }
+
+    async function fetchWithRetry(url, options, retries = 5) {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const res = await fetch(url, options);
+                if (res.ok) return res;
+                if (res.status !== 429 && res.status < 500) break;
+            } catch (e) {}
+            await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
+        }
+        throw new Error("多次重試連線失敗");
+    }
+
+    // --- 手動去背與筆刷邏輯 ---
+    canvas.addEventListener('mousedown', (e) => {
+        if (!originalImage || currentMode === 'view') return;
+        isDrawing = true;
+        handleDraw(e);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isDrawing) handleDraw(e);
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isDrawing) {
+            saveState(currentMode === 'eraser' ? "手動擦除" : "筆刷還原"); // 這裡觸發手動存檔
+            isDrawing = false;
+        }
+    });
+
+    function handleDraw(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+        offCtx.save();
+        offCtx.beginPath();
+        offCtx.arc(x, y, brushSize, 0, Math.PI * 2);
+        
+        if (currentMode === 'eraser') {
+            offCtx.globalCompositeOperation = 'destination-out'; // 透明效果
+            offCtx.fill();
+        } else if (currentMode === 'restore') {
+            offCtx.clip();
+            // 從備份中還原像素（注意備份畫布尺寸需一致，否則需計算偏移）
+            offCtx.drawImage(backupCanvas, 0, 0, canvas.width, canvas.height);
+        }
+        offCtx.restore();
+        render();
+    }
+
+    // --- UI 控制與模式切換 ---
+    document.getElementById('aiRemoveBg').onclick = aiRemoveBackground;
+    
+    document.getElementById('modeEraser').onclick = () => setMode('eraser');
+    document.getElementById('modeRestore').onclick = () => setMode('restore');
+    
+    function setMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+        if (mode === 'eraser') document.getElementById('modeEraser').classList.add('active');
+        if (mode === 'restore') document.getElementById('modeRestore').classList.add('active');
+        document.getElementById('modeStatus').textContent = `模式: ${mode === 'eraser' ? '橡皮擦' : '還原筆'}`;
+    }
+
+    document.getElementById('brushSize').oninput = (e) => {
+        brushSize = parseInt(e.target.value);
+        document.getElementById('v-brushSize').textContent = brushSize;
+    };
+
+    document.getElementById('undoBtn').onclick = () => {
+        if (historyStack.length > 1) {
+            jumpToHistory(historyStack.length - 2);
+        }
+    };
+
+    document.getElementById('resetBtn').onclick = () => {
+        if (confirm("確定要清除所有編輯嗎？")) {
+            jumpToHistory(0);
+        }
+    };
+
+    // --- 傳統編輯工具適配 ---
+    document.getElementById('rotate90').onclick = () => {
+        const temp = document.createElement('canvas');
+        temp.width = offCanvas.height; temp.height = offCanvas.width;
+        const tCtx = temp.getContext('2d');
+        tCtx.translate(temp.width/2, temp.height/2);
+        tCtx.rotate(Math.PI/2);
+        tCtx.drawImage(offCanvas, -offCanvas.width/2, -offCanvas.height/2);
+        
+        initCanvasDimensions(temp.width, temp.height);
+        offCtx.drawImage(temp, 0, 0);
+        saveState("旋轉 90°");
+        render();
+    };
+
+    document.getElementById('flipH').onclick = () => {
+        const temp = document.createElement('canvas');
+        temp.width = offCanvas.width; temp.height = offCanvas.height;
+        const tCtx = temp.getContext('2d');
+        tCtx.translate(temp.width, 0);
+        tCtx.scale(-1, 1);
+        tCtx.drawImage(offCanvas, 0, 0);
+        
+        offCtx.clearRect(0,0,offCanvas.width, offCanvas.height);
+        offCtx.drawImage(temp, 0, 0);
+        saveState("水平翻轉");
+        render();
+    };
+
+    window.applySpecialFilter = function(type) {
+        if (type === 'gray') {
+            const d = offCtx.getImageData(0,0,offCanvas.width, offCanvas.height);
+            for(let i=0; i<d.data.length; i+=4) {
+                if (d.data[i+3] === 0) continue; // 跳過透明像素
+                const g = d.data[i]*0.3 + d.data[i+1]*0.59 + d.data[i+2]*0.11;
+                d.data[i] = d.data[i+1] = d.data[i+2] = g;
+            }
+            offCtx.putImageData(d, 0, 0);
+            saveState("套用黑白");
+            render();
+        }
+    };
+
+    document.getElementById('downloadBtn').onclick = () => {
+        if (!originalImage) return;
+        const link = document.createElement('a');
+        link.download = `AI_Pro_Edit_${Date.now()}.png`;
+        link.href = offCanvas.toDataURL('image/png');
+        link.click();
+    };
+
+    // 拖放上傳
+    const dropZone = document.getElementById('dropZone');
+    const dropOverlay = document.getElementById('dropOverlay');
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropOverlay.style.display = 'flex'; });
+    dropZone.addEventListener('dragleave', () => dropOverlay.style.display = 'none');
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropOverlay.style.display = 'none';
+        handleFile(e.dataTransfer.files[0]);
+    });
+</script>
+</body>
+</html>
